@@ -1,124 +1,76 @@
 import os
+import sys
 import requests
-import psycopg2
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import sys
+
 print(f"🔧 Python version: {sys.version}")
 
-# Загружаем переменные окружения
+# Загружаем .env
 load_dotenv()
 
-DB_USER = os.getenv("user")
-DB_PASSWORD = os.getenv("password")
-DB_HOST = os.getenv("host")
-DB_PORT = os.getenv("port")
-DB_NAME = os.getenv("dbname")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json"
+}
 
+# === Функции для сохранения данных через REST API Supabase ===
 def save_user_info(user, chat_id):
     try:
-        connection = psycopg2.connect(
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME
-        )
-        cursor = connection.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
-                language_code TEXT,
-                is_premium BOOLEAN,
-                chat_id BIGINT
-            );
-        """)
-        cursor.execute("""
-            INSERT INTO users (user_id, username, first_name, last_name, language_code, is_premium, chat_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (user_id) DO NOTHING;
-        """, (
-            user.id,
-            user.username,
-            user.first_name,
-            user.last_name,
-            user.language_code,
-            getattr(user, 'is_premium', False),
-            chat_id
-        ))
-        connection.commit()
-        cursor.close()
-        connection.close()
-        print("✅ Пользователь сохранён в базе.")
+        payload = {
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "language_code": user.language_code,
+            "is_premium": getattr(user, 'is_premium', False),
+            "chat_id": chat_id
+        }
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/users", headers=HEADERS, json=payload)
+        if response.status_code in (200, 201):
+            print("✅ Пользователь сохранён в Supabase")
+        else:
+            print(f"❌ Ошибка сохранения пользователя: {response.text}")
     except Exception as e:
-        print(f"❌ Ошибка сохранения пользователя: {e}")
+        print(f"❌ Ошибка запроса: {e}")
 
 def save_location(user_id, latitude, longitude, address):
     try:
-        connection = psycopg2.connect(
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME
-        )
-        cursor = connection.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS locations (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT,
-                latitude DOUBLE PRECISION,
-                longitude DOUBLE PRECISION,
-                address TEXT
-            );
-        """)
-        cursor.execute("""
-            INSERT INTO locations (user_id, latitude, longitude, address)
-            VALUES (%s, %s, %s, %s);
-        """, (user_id, latitude, longitude, address))
-        connection.commit()
-        cursor.close()
-        connection.close()
-        print("📍 Геолокация сохранена.")
+        payload = {
+            "user_id": user_id,
+            "latitude": latitude,
+            "longitude": longitude,
+            "address": address
+        }
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/locations", headers=HEADERS, json=payload)
+        if response.status_code in (200, 201):
+            print("📍 Геолокация сохранена")
+        else:
+            print(f"❌ Ошибка сохранения геолокации: {response.text}")
     except Exception as e:
-        print(f"❌ Ошибка сохранения геолокации: {e}")
+        print(f"❌ Ошибка запроса: {e}")
 
 def save_echo(user_id, text):
     try:
-        connection = psycopg2.connect(
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME
-        )
-        cursor = connection.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT,
-                message TEXT
-            );
-        """)
-        cursor.execute("""
-            INSERT INTO messages (user_id, message)
-            VALUES (%s, %s);
-        """, (user_id, text))
-        connection.commit()
-        cursor.close()
-        connection.close()
-        print("💬 Сообщение сохранено.")
+        payload = {
+            "user_id": user_id,
+            "message": text
+        }
+        response = requests.post(f"{SUPABASE_URL}/rest/v1/messages", headers=HEADERS, json=payload)
+        if response.status_code in (200, 201):
+            print("💬 Сообщение сохранено")
+        else:
+            print(f"❌ Ошибка сохранения сообщения: {response.text}")
     except Exception as e:
-        print(f"❌ Ошибка сохранения сообщения: {e}")
+        print(f"❌ Ошибка запроса: {e}")
 
-# Получение адреса по координатам
+# === Геокодирование ===
 def get_address_from_coords(lat, lon):
     try:
         url = "https://nominatim.openstreetmap.org/reverse"
@@ -141,7 +93,7 @@ def get_address_from_coords(lat, lon):
     except Exception as e:
         return f"Ошибка: {e}"
 
-# /start
+# === Команды и обработчики ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
@@ -180,7 +132,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=location_keyboard
         )
 
-# Обработка геолокации
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     location = update.message.location
     user = update.effective_user
@@ -201,14 +152,13 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
-# Обработка текста
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.message.text
     save_echo(user.id, message)
     await update.message.reply_text(f"Вы сказали: {message}")
 
-# Запуск
+# === Запуск бота ===
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
