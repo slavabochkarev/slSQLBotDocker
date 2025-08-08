@@ -2,6 +2,8 @@ import os
 import requests
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+import sys
+print(f"🔧 Python version: {sys.version}")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Читаем токен из переменной окружения
 
