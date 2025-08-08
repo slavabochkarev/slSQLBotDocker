@@ -1,26 +1,27 @@
 import os
-import sys
 import requests
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import sys
 
 print(f"🔧 Python version: {sys.version}")
 
-# Загружаем .env
+# Загружаем переменные окружения
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 
+# 📌 Базовые настройки для REST API
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json"
 }
 
-# === Функции для сохранения данных через REST API Supabase ===
+# ====== Функции сохранения ======
 def save_user_info(user, chat_id):
     try:
         payload = {
@@ -29,16 +30,16 @@ def save_user_info(user, chat_id):
             "first_name": user.first_name,
             "last_name": user.last_name,
             "language_code": user.language_code,
-            "is_premium": getattr(user, 'is_premium', False),
+            "is_premium": getattr(user, "is_premium", False),
             "chat_id": chat_id
         }
-        response = requests.post(f"{SUPABASE_URL}/rest/v1/users", headers=HEADERS, json=payload)
-        if response.status_code in (200, 201):
-            print("✅ Пользователь сохранён в Supabase")
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/users", json=payload, headers=HEADERS)
+        if r.status_code in (200, 201):
+            print("✅ Пользователь сохранён в Supabase.")
         else:
-            print(f"❌ Ошибка сохранения пользователя: {response.text}")
+            print(f"❌ Ошибка сохранения пользователя: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"❌ Ошибка запроса: {e}")
+        print(f"❌ Ошибка сохранения пользователя: {e}")
 
 def save_location(user_id, latitude, longitude, address):
     try:
@@ -48,42 +49,34 @@ def save_location(user_id, latitude, longitude, address):
             "longitude": longitude,
             "address": address
         }
-        response = requests.post(f"{SUPABASE_URL}/rest/v1/locations", headers=HEADERS, json=payload)
-        if response.status_code in (200, 201):
-            print("📍 Геолокация сохранена")
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/locations", json=payload, headers=HEADERS)
+        if r.status_code in (200, 201):
+            print("📍 Геолокация сохранена в Supabase.")
         else:
-            print(f"❌ Ошибка сохранения геолокации: {response.text}")
+            print(f"❌ Ошибка сохранения геолокации: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"❌ Ошибка запроса: {e}")
+        print(f"❌ Ошибка сохранения геолокации: {e}")
 
-def save_echo(user_id, text):
+def save_activity(user_id, message):
     try:
         payload = {
             "user_id": user_id,
-            "message": text
+            "message": message
         }
-        response = requests.post(f"{SUPABASE_URL}/rest/v1/messages", headers=HEADERS, json=payload)
-        if response.status_code in (200, 201):
-            print("💬 Сообщение сохранено")
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/activity_log", json=payload, headers=HEADERS)
+        if r.status_code in (200, 201):
+            print("💬 Сообщение сохранено в Supabase.")
         else:
-            print(f"❌ Ошибка сохранения сообщения: {response.text}")
+            print(f"❌ Ошибка сохранения сообщения: {r.status_code} {r.text}")
     except Exception as e:
-        print(f"❌ Ошибка запроса: {e}")
+        print(f"❌ Ошибка сохранения сообщения: {e}")
 
-# === Геокодирование ===
+# ====== Геокодирование ======
 def get_address_from_coords(lat, lon):
     try:
         url = "https://nominatim.openstreetmap.org/reverse"
-        params = {
-            "format": "json",
-            "lat": lat,
-            "lon": lon,
-            "zoom": 18,
-            "addressdetails": 1
-        }
-        headers = {
-            "User-Agent": "telegram-bot-demo"
-        }
+        params = {"format": "json", "lat": lat, "lon": lon, "zoom": 18, "addressdetails": 1}
+        headers = {"User-Agent": "telegram-bot-demo"}
         response = requests.get(url, params=params, headers=headers)
         if response.status_code == 200:
             data = response.json()
@@ -93,7 +86,7 @@ def get_address_from_coords(lat, lon):
     except Exception as e:
         return f"Ошибка: {e}"
 
-# === Команды и обработчики ===
+# ====== Хэндлеры ======
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
@@ -119,18 +112,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if photo_id:
-        await update.message.reply_photo(
-            photo=photo_id,
-            caption=text,
-            parse_mode="HTML",
-            reply_markup=location_keyboard
-        )
+        await update.message.reply_photo(photo=photo_id, caption=text, parse_mode="HTML", reply_markup=location_keyboard)
     else:
-        await update.message.reply_text(
-            text=text,
-            parse_mode="HTML",
-            reply_markup=location_keyboard
-        )
+        await update.message.reply_text(text=text, parse_mode="HTML", reply_markup=location_keyboard)
 
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     location = update.message.location
@@ -138,7 +122,6 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     latitude = location.latitude
     longitude = location.longitude
-
     address = get_address_from_coords(latitude, longitude)
 
     save_location(user.id, latitude, longitude, address)
@@ -155,10 +138,10 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.message.text
-    save_echo(user.id, message)
+    save_activity(user.id, message)
     await update.message.reply_text(f"Вы сказали: {message}")
 
-# === Запуск бота ===
+# ====== Запуск бота ======
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
