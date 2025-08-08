@@ -42,12 +42,14 @@ def save_location(user_id, latitude, longitude, address):
     try:
         url = f"{SUPABASE_URL}/rest/v1/locations"
         data = {
-            "user_id": user_id,
-            "latitude": latitude,
-            "longitude": longitude,
-            "address": address
+            "user_id": int(user_id),
+            "latitude": float(latitude),
+            "longitude": float(longitude),
+            "address": address or ""
         }
-        r = requests.post(url, headers=HEADERS, json=data, params={"return": "minimal"})
+        r = requests.post(url, headers=HEADERS, json=data)
+        if r.status_code >= 400:
+            print("⚠ Ответ Supabase (locations):", r.text)
         r.raise_for_status()
         print("📍 Геолокация сохранена.")
     except Exception as e:
@@ -57,10 +59,12 @@ def save_activity(user_id, action):
     try:
         url = f"{SUPABASE_URL}/rest/v1/activity_log"
         data = {
-            "user_id": user_id,
-            "action": action
+            "user_id": int(user_id),
+            "action": action or ""
         }
-        r = requests.post(url, headers=HEADERS, json=data, params={"return": "minimal"})
+        r = requests.post(url, headers=HEADERS, json=data)
+        if r.status_code >= 400:
+            print("⚠ Ответ Supabase (activity_log):", r.text)
         r.raise_for_status()
         print("💬 Действие сохранено.")
     except Exception as e:
