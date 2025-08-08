@@ -1,9 +1,11 @@
 import os
 import sys
-import requests
 from dotenv import load_dotenv
+import requests
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+
+from supabase_utils import save_user_info, save_location, save_action
 
 print(f"🔧 Python version: {sys.version}")
 
@@ -11,73 +13,9 @@ print(f"🔧 Python version: {sys.version}")
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json"
-}
-
-# ======= REST-запросы =======
-def save_user_info(user):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/users?on_conflict=id"
-        data = {
-            "id": int(user.id),
-            "first_name": user.first_name or "",
-            "last_name": user.last_name or "",
-            "username": user.username or "",
-            "language_code": user.language_code or "",
-            "is_premium": bool(getattr(user, "is_premium", False))
-        }
-        r = requests.post(
-            url,
-            headers={**HEADERS, "Prefer": "resolution=merge-duplicates"},
-            json=data
-        )
-        if r.status_code >= 400:
-            print("⚠ Ответ Supabase (users):", r.text)
-        r.raise_for_status()
-        print("✅ Пользователь сохранён или обновлён в базе.")
-    except Exception as e:
-        print(f"❌ Ошибка сохранения пользователя: {e}")
-
-def save_location(user_id, latitude, longitude, address):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/locations"
-        data = {
-            "user_id": int(user_id),
-            "latitude": float(latitude),
-            "longitude": float(longitude),
-            "address": address or ""
-        }
-        r = requests.post(url, headers=HEADERS, json=data)
-        if r.status_code >= 400:
-            print("⚠ Ответ Supabase (locations):", r.text)
-        r.raise_for_status()
-        print("📍 Геолокация сохранена.")
-    except Exception as e:
-        print(f"❌ Ошибка сохранения геолокации: {e}")
-
-def save_activity(user_id, action):
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/activity_log"
-        data = {
-            "user_id": int(user_id),
-            "action": action or ""
-        }
-        r = requests.post(url, headers=HEADERS, json=data)
-        if r.status_code >= 400:
-            print("⚠ Ответ Supabase (activity_log):", r.text)
-        r.raise_for_status()
-        print("💬 Действие сохранено.")
-    except Exception as e:
-        print(f"❌ Ошибка сохранения действия: {e}")
-        
-# ======= Вспомогательная функция =======
 def get_address_from_coords(lat, lon):
+    """Определяет адрес по координатам"""
     try:
         url = "https://nominatim.openstreetmap.org/reverse"
         params = {
@@ -91,21 +29,19 @@ def get_address_from_coords(lat, lon):
         response = requests.get(url, params=params, headers=headers)
         if response.status_code == 200:
             return response.json().get("display_name", "Адрес не найден")
-        else:
-            return "Ошибка геокодирования"
+        return "Ошибка геокодирования"
     except Exception as e:
         return f"Ошибка: {e}"
 
-# ======= Обработчики =======
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat = update.effective_chat
 
     save_user_info(user)
-    save_activity(user.id, "start command")
+    save_action(user.id, "/start")
 
     location_button = KeyboardButton("📍 Отправить геолокацию", request_location=True)
-    location_keyboard = ReplyKeyboardMarkup([[location_button]], resize_keyboard=True)
+    location_keyboard = ReplyKeyboardMarkup([[location_button]], resize_keyboard=True, one_time_keyboard=True)
 
     text = (
         f"👤 <b>Информация о вас:</b>\n\n"
@@ -115,13 +51,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔗 Username: @{user.username or '-'}\n"
         f"🌐 Язык: {user.language_code or '-'}\n"
         f"💎 Premium: {'Да' if getattr(user, 'is_premium', False) else 'Нет'}\n"
+        f"💬 Chat ID: {chat.id}\n\n"
+        f"📍 Пожалуйста, отправьте свою геолокацию 👇"
     )
 
-    await update.message.reply_text(
-        text=text,
-        parse_mode="HTML",
-        reply_markup=location_keyboard
-    )
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=location_keyboard)
 
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     location = update.message.location
@@ -129,13 +63,14 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     latitude = location.latitude
     longitude = location.longitude
-
     address = get_address_from_coords(latitude, longitude)
+
     save_location(user.id, latitude, longitude, address)
-    save_activity(user.id, "sent location")
+    save_action(user.id, "send_location")
 
     await update.message.reply_text(
         f"📍 Спасибо, {user.first_name}!\n"
+        f"<b>Ваша геолокация:</b>\n"
         f"🧭 Широта: <code>{latitude}</code>\n"
         f"🧭 Долгота: <code>{longitude}</code>\n"
         f"🏠 Адрес: <i>{address}</i>",
@@ -145,14 +80,17 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.message.text
-    save_activity(user.id, f"message: {message}")
+
+    save_action(user.id, f"message: {message}")
+
     await update.message.reply_text(f"Вы сказали: {message}")
 
-# ======= Запуск =======
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.LOCATION, location_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+
     print("✅ Бот запущен...")
     app.run_polling()
