@@ -23,18 +23,24 @@ HEADERS = {
 # ======= REST-запросы =======
 def save_user_info(user):
     try:
-        url = f"{SUPABASE_URL}/rest/v1/users"
+        url = f"{SUPABASE_URL}/rest/v1/users?on_conflict=id"
         data = {
-            "id": user.id,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "username": user.username,
-            "language_code": user.language_code,
-            "is_premium": getattr(user, "is_premium", False)
+            "id": int(user.id),
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "username": user.username or "",
+            "language_code": user.language_code or "",
+            "is_premium": bool(getattr(user, "is_premium", False))
         }
-        r = requests.post(url, headers=HEADERS, json=data)
+        r = requests.post(
+            url,
+            headers={**HEADERS, "Prefer": "resolution=merge-duplicates"},
+            json=data
+        )
+        if r.status_code >= 400:
+            print("⚠ Ответ Supabase (users):", r.text)
         r.raise_for_status()
-        print("✅ Пользователь сохранён в базе.")
+        print("✅ Пользователь сохранён или обновлён в базе.")
     except Exception as e:
         print(f"❌ Ошибка сохранения пользователя: {e}")
 
