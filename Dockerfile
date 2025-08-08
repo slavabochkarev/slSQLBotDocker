@@ -7,6 +7,7 @@ WORKDIR /app
 # Копируем файлы проекта
 COPY requirements.txt .
 COPY bot.py .
+COPY supabase_utils.py .
 
 # Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
