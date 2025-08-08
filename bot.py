@@ -47,7 +47,7 @@ def save_location(user_id, latitude, longitude, address):
             "longitude": longitude,
             "address": address
         }
-        r = requests.post(url, headers=HEADERS, json=data)
+        r = requests.post(url, headers=HEADERS, json=data, params={"return": "minimal"})
         r.raise_for_status()
         print("📍 Геолокация сохранена.")
     except Exception as e:
@@ -60,12 +60,12 @@ def save_activity(user_id, action):
             "user_id": user_id,
             "action": action
         }
-        r = requests.post(url, headers=HEADERS, json=data)
+        r = requests.post(url, headers=HEADERS, json=data, params={"return": "minimal"})
         r.raise_for_status()
         print("💬 Действие сохранено.")
     except Exception as e:
         print(f"❌ Ошибка сохранения действия: {e}")
-
+        
 # ======= Вспомогательная функция =======
 def get_address_from_coords(lat, lon):
     try:
