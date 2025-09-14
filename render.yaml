@@ -1,10 +1,10 @@
 services:
-  - type: worker
-    name: telegram-bot
+  - type: web
+    name: telegram-whisper-bot
     env: docker
     plan: free
     envVars:
       - key: TELEGRAM_TOKEN
-        sync: false
+        sync: false   
       - key: WHISPER_MODEL
-        value: base
+        value: base   
