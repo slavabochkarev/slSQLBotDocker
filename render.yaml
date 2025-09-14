@@ -1,2 +1,10 @@
-build:
-  pythonVersion: 3.10
+services:
+  - type: worker
+    name: telegram-bot
+    env: docker
+    plan: free
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: WHISPER_MODEL
+        value: base
