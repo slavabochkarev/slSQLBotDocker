@@ -1,20 +1,16 @@
 import os
-import aiohttp
+import wave
+import re
+import subprocess
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils.executor import start_webhook
-from pydub import AudioSegment
-from faster_whisper import WhisperModel
+from vosk import Model, KaldiRecognizer
 
-print(">>> Starting bot...")
-print(">>> TELEGRAM_TOKEN:", os.getenv("TELEGRAM_TOKEN"))
-print(">>> RENDER_EXTERNAL_HOSTNAME:", os.getenv("RENDER_EXTERNAL_HOSTNAME"))
-
-
-# === Конфиги ===
 API_TOKEN = os.getenv("TELEGRAM_TOKEN")
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")  # tiny, base, small, medium
 
-# Webhook настройки (Render сам задаст hostname)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+
 WEBHOOK_HOST = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}"
 WEBHOOK_PATH = f"/webhook/{API_TOKEN}"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
@@ -22,52 +18,71 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", 8080))
 
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+# Загружаем модель Vosk (скачай заранее и положи в ./models/)
+MODEL_PATH = "models/vosk-model-small-ru-0.22"
+model = Model(MODEL_PATH)
 
-# Загружаем модель при старте (CPU-only)
-model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+async def convert_to_wav(input_file: str, output_file: str):
+    """Конвертация ogg -> wav 16kHz mono"""
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", input_file,
+        "-ar", "16000",
+        "-ac", "1",
+        output_file,
+    ]
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+def recognize_digits(wav_path: str) -> str:
+    """Распознавание речи и извлечение только цифр"""
+    wf = wave.open(wav_path, "rb")
+    rec = KaldiRecognizer(model, 16000)
+
+    result_text = ""
+    while True:
+        data = wf.readframes(4000)
+        if len(data) == 0:
+            break
+        if rec.AcceptWaveform(data):
+            res = rec.Result()
+            result_text += res
+
+    res = rec.FinalResult()
+    result_text += res
+
+    # Вытаскиваем цифры
+    digits = re.sub(r"\D", "", result_text)
+    return digits if digits else "Цифры не найдены"
 
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
-    await message.reply("Привет! Я бот с локальным распознаванием речи (faster-whisper).")
+    await message.reply("Привет 👋 Пришли мне голосовое с цифрами, и я их распознаю!")
 
-
-@dp.message_handler(content_types=["voice"])
-async def voice_message_handler(message: types.Message):
-    file_id = message.voice.file_id
-    file = await bot.get_file(file_id)
+@dp.message_handler(content_types=types.ContentType.VOICE)
+async def voice_handler(message: types.Message):
+    file = await bot.get_file(message.voice.file_id)
     file_path = file.file_path
+    file_name = "voice.ogg"
+    wav_name = "voice.wav"
 
-    url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            audio_data = await resp.read()
-            with open("voice.ogg", "wb") as f:
-                f.write(audio_data)
+    # Скачиваем голосовое
+    await bot.download_file(file_path, file_name)
 
-    # Обрезаем первые 5 секунд
-    audio = AudioSegment.from_file("voice.ogg", format="ogg")
-    first_5_sec = audio[:5000]
-    first_5_sec.export("voice_trimmed.wav", format="wav")
+    # Конвертируем в wav
+    await convert_to_wav(file_name, wav_name)
 
-    # Распознаём через faster-whisper
-    segments, _ = model.transcribe("voice_trimmed.wav", beam_size=5, language="ru")
-    text = " ".join([seg.text for seg in segments])
+    # Распознаём
+    digits = recognize_digits(wav_name)
 
-    await message.reply(f"📝 Текст: {text if text else 'не удалось распознать'}")
-
+    await message.reply(f"Распознанные цифры: {digits}")
 
 async def on_startup(dp):
     print(">>> Устанавливаем webhook:", WEBHOOK_URL)
     await bot.set_webhook(WEBHOOK_URL)
 
-
 async def on_shutdown(dp):
-    print(">>> Удаляем webhook")
     await bot.delete_webhook()
-
 
 if __name__ == "__main__":
     start_webhook(
