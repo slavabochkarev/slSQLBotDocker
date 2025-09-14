@@ -5,6 +5,11 @@ from aiogram.utils.executor import start_webhook
 from pydub import AudioSegment
 from faster_whisper import WhisperModel
 
+print(">>> Starting bot...")
+print(">>> TELEGRAM_TOKEN:", os.getenv("TELEGRAM_TOKEN"))
+print(">>> RENDER_EXTERNAL_HOSTNAME:", os.getenv("RENDER_EXTERNAL_HOSTNAME"))
+
+
 # === Конфиги ===
 API_TOKEN = os.getenv("TELEGRAM_TOKEN")
 MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")  # tiny, base, small, medium
