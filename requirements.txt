@@ -1,4 +1,6 @@
+#aiogram==2.25.1
+#aiohttp
+#pydub
+#faster-whisper
 aiogram==2.25.1
-aiohttp
-pydub
-faster-whisper
+vosk==0.3.45
