@@ -12,7 +12,7 @@ print(">>> RENDER_EXTERNAL_HOSTNAME:", os.getenv("RENDER_EXTERNAL_HOSTNAME"))
 
 # === Конфиги ===
 API_TOKEN = os.getenv("TELEGRAM_TOKEN")
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")  # tiny, base, small, medium
+MODEL_SIZE = os.getenv("WHISPER_MODEL", "tiny")  # tiny, base, small, medium
 
 # Webhook настройки (Render сам задаст hostname)
 WEBHOOK_HOST = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}"
@@ -22,7 +22,6 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 WEBAPP_HOST = "0.0.0.0"
 WEBAPP_PORT = int(os.getenv("PORT", 8080))
 
-# === Инициализация ===
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
@@ -32,7 +31,7 @@ model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
 
 @dp.message_handler(commands=["start"])
 async def start_cmd(message: types.Message):
-    await message.reply("👋 Привет! Я бот с локальным распознаванием речи (faster-whisper).")
+    await message.reply("Привет! Я бот с локальным распознаванием речи (faster-whisper).")
 
 
 @dp.message_handler(content_types=["voice"])
@@ -41,7 +40,6 @@ async def voice_message_handler(message: types.Message):
     file = await bot.get_file(file_id)
     file_path = file.file_path
 
-    # Скачиваем голосовое сообщение
     url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
