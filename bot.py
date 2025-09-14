@@ -1,4 +1,7 @@
+print(">>> bot.py стартанул")
 import os
+print(">>> TELEGRAM_TOKEN:", os.getenv("TELEGRAM_TOKEN"))
+print(">>> RENDER_EXTERNAL_HOSTNAME:", os.getenv("RENDER_EXTERNAL_HOSTNAME"))
 import wave
 import re
 import subprocess
@@ -7,7 +10,7 @@ from aiogram.utils.executor import start_webhook
 from vosk import Model, KaldiRecognizer
 
 API_TOKEN = os.getenv("TELEGRAM_TOKEN")
-
+print(">>> TELEGRAM_TOKEN:", os.getenv("TELEGRAM_TOKEN"))
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
