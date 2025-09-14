@@ -53,7 +53,7 @@ async def voice_message_handler(message: types.Message):
     first_5_sec.export("voice_trimmed.wav", format="wav")
 
     # Распознаём через faster-whisper
-    segments, _ = model.transcribe("voice_trimmed.wav", beam_size=5)
+    segments, _ = model.transcribe("voice_trimmed.wav", beam_size=5, language="ru")
     text = " ".join([seg.text for seg in segments])
 
     await message.reply(f"📝 Текст: {text if text else 'не удалось распознать'}")
