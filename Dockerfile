@@ -1,19 +1,17 @@
-# Используем Python 3.11
-FROM python:3.11-slim
+FROM python:3.10-slim
+
+# Устанавливаем ffmpeg и зависимости
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
 WORKDIR /app
 
-# Копируем файлы проекта
+# Копируем зависимости
 COPY requirements.txt .
-COPY bot.py .
-COPY supabase_utils.py .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Указываем переменные окружения (токен будет передаваться через Render)
-ENV PYTHONUNBUFFERED=1
+# Копируем код
+COPY . .
 
-# Запуск бота
+# Запускаем бота
 CMD ["python", "bot.py"]
